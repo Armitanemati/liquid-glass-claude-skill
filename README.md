@@ -1,4 +1,4 @@
-# Liquid Glass Claude Skill
+# Liquid Glass Claude Skill - Design System
 
 A **Claude Skill** (`SKILL.md`) for designing **Liquid Glass** and **glassmorphism** interfaces: Apple-style layering, material tiers, accessible contrast, and fallbacks for web, SwiftUI, and mobile. Brand-agnostic, so it works for any product.
 
