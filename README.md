@@ -4,8 +4,6 @@ A brand-agnostic design skill for building interfaces with Liquid Glass and glas
 
 It is a **design reasoning system**, not a collection of CSS snippets. It teaches an AI agent (or a design team) *when* translucent material helps, *where* it belongs, and *how* to keep it legible, accessible, and fast.
 
-![Fictional example: floating navigation, action group, and filter bar in glass over content that stays solid](examples/example-media-app.png)
-
 ## What is inside
 
 ```
