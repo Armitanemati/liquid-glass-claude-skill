@@ -1,0 +1,17 @@
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Logs and dependencies
+*.log
+node_modules/
+
+# Local secrets (never commit)
+.env
+.env.*
