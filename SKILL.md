@@ -48,6 +48,8 @@ Never interpret any of these as: add `backdrop-filter: blur()`, make cards trans
 2. **Legibility is the known failure mode.** After public readability complaints, iOS 26.1 added a user setting (Clear or Tinted) that raises opacity and contrast. Default toward the more opaque, more legible side. Clear glass is the exception, not the baseline.
 3. **Apple's stated usage rules** that this system adopts: glass belongs to the navigation layer that floats above content; do not stack glass on glass (use fills and transparency for separation inside a glass surface); tint only to emphasize primary actions; the clear variant is only for media-rich backgrounds, where a dimming layer is acceptable, and content on top is bold and bright.
 4. **Do not overclaim.** When delivering, state plainly which effects are native, which are approximated, and which browsers or OS versions get the fallback.
+5. **A filter inside `backdrop-filter` knows nothing about the element's shape.** It receives only the backdrop image, which is opaque everywhere. So refraction driven by `feTurbulence` is *uniform*: it wobbles the middle of a pane exactly as much as the rim, which reads as heat haze, not glass. Real lensing is edge-concentrated, and the only way to get it is to build a displacement map from the element's own outline (section 17.2). A "chromatic aberration" made by displacing R/G/B by different uniform amounts is not aberration, it is a desaturation pass; measured side by side, the filtered bar was visibly greyer.
+6. **Blur over a flat backdrop is invisible.** Blurring a smooth gradient returns the same gradient. Pixel-diffing a card with the blur on and off over a soft page gradient gave a maximum channel difference of 3/255; the same diff on a bar with real content scrolling under it changed 60% of pixels. Glass needs something with structure behind it (content, an image, a deliberately placed glow), or the blur is pure cost.
 
 ---
 
@@ -166,7 +168,8 @@ All values are **starting points**, not rules. Tune against the actual backdrop 
 Choose explicitly, per component:
 - Raise opacity toward the tier maximum over busy regions
 - Switch foreground light/dark based on the backdrop (native platforms do this; on web, use scroll position or section-level flags, not per-frame pixel sampling)
-- Add a scroll edge fade under fixed bars so content softens before it reaches the bar
+- Add a scroll edge effect under fixed bars: a short fixed strip that dissolves content into the page background before it reaches the bar (Apple: it "lifts the glass visually above the moving content"). Show it only once there is content under the bar; it is one more filtered layer, so drop it while a sheet is open on a phone.
+- Make the bar's shadow content-aware: heavier over text and images, lighter over a plain light surface. On the web, hit-test two or three points just under the bar per scroll frame (`elementsFromPoint`) and classify what is found; set state only on change.
 - Reposition the control away from the busiest region
 - Remove glass and use a solid surface
 
@@ -286,6 +289,9 @@ Every glass control defines: rest, hover (pointer only), pressed, focus-visible,
 - Never apply to entire pages, large content grids, image collections, or long lists of items.
 - Do not animate blur radius on large surfaces; animate opacity or transform instead.
 - Test on mid-range and older devices, not only on a current high-end laptop.
+- Measured reference points, software-rendered headless Chromium, 1440px page, scrolling: 0 filtered layers 16.7ms median frame; 1 layer 20ms; 2 layers 24ms; 5 layers 29ms median / 74ms p95; 9 layers 79ms median / 365ms worst. Real GPUs do far better, but the shape of the curve holds.
+- Add a static variant to the material (same fill, rim and highlight, `backdrop-filter: none`) for surfaces that sit on the page background rather than above scrolling content. Same look, no per-frame cost. Decide per surface with a pixel diff, not by taste.
+- Glass that only frosts on hover is not glass. If a surface is the design's centrepiece and the design shows it frosted at rest, spend the budget there and take it back elsewhere (static content panels, fewer layers on mobile). Do not quietly gate the effect to hover to make the numbers work; say what it costs and let the owner decide.
 
 ---
 
@@ -394,7 +400,10 @@ Dark mode: redefine brand tokens and fills under the project's theme mechanism; 
 Web gotchas:
 - **Backdrop root:** `backdrop-filter` only samples up to the nearest ancestor that creates a backdrop root (for example an ancestor with `filter`, `opacity` below 1, `mask`, `mix-blend-mode`, or its own `backdrop-filter`). Nested glass and glass inside faded containers silently show nothing. Another reason not to nest.
 - If the blur bleeds past rounded corners in a given engine, add `overflow: hidden` to the glass element.
-- SVG displacement "refraction" is Chromium-only in `backdrop-filter`: gate it behind feature detection and make the non-refracted version the designed baseline.
+- SVG displacement "refraction" is Chromium-only in `backdrop-filter`. Safari and Firefox drop the **entire** `backdrop-filter` declaration if any function in the list is unsupported, so an ungated `url(#filter)` removes the blur outright in two engines. Gate it: `@supports (backdrop-filter: blur(1px) url(#a)) { ... }`, and make the non-refracted version the designed baseline.
+- Chrome silently renders **neither** effect on an element that carries both `mask-image` and `backdrop-filter` (verified live). Put the mask on an outer element and the blur on an unmasked inner child. The older `clip-path` + `backdrop-filter` bug is separate and also real.
+- A highlight or specular layer with `mix-blend-mode` forces its parent into an isolated group, and an isolated ancestor is a backdrop root: the sibling glass samples nothing. Use plain translucent gradients for highlights.
+- Tailwind v4: colour tokens declared in `@theme inline` are baked as literals into every utility (`.bg-surface{background-color:#fff}`), so a themed override changes nothing. Put colour tokens in plain `@theme` so utilities emit `var(--color-…)`. Verify in the built CSS.
 - Components expose a `material` prop (`"none" | "thin" | "regular" | "thick"`) instead of ad hoc class stacks, so tiers stay enforceable.
 - Utility CSS frameworks: define tiers as named utilities or component classes backed by the tokens; do not scatter one-off blur values.
 
@@ -444,6 +453,10 @@ If the output starts resembling any of these, stop and correct.
 | 20 | Clear glass over text-heavy or light content | Use Regular or Thick |
 | 21 | Refraction or blur as the only affordance | Controls must read as controls with glass disabled |
 | 22 | Apple clone (Apple icons, iOS chrome on a web brand) | Adopt principles, not Apple's visual assets |
+| 23 | Frost that switches on only on hover | Frost at rest; rebalance the layer budget elsewhere |
+| 24 | Uniform noise "refraction" across the whole pane | Edge-concentrated displacement from the element's outline, or no refraction |
+| 25 | Matching a design tool's slider numbers instead of its look | Match the rendered reference by eye and by pixel; the numbers do not translate (section 17.1) |
+| 26 | Opaque brand fill on the primary button inside glass | Tinted glass: brand colour at ~80-85% with the material's rim and key light; measure the text contrast |
 
 Visual character check. Should feel: light, spatial, precise, calm, premium, tactile, adaptive, modern, intentional. Must not feel: glossy, plastic, futuristic for its own sake, Web3, generic AI, template-like, neon, overly colorful, excessively rounded, visually noisy.
 
@@ -466,3 +479,60 @@ Answer each explicitly. Any "no" means revise.
 | Brand | Does it belong to this specific product? | Colors, type, imagery traceable to the Project Brand System |
 
 When delivering, report the checks, the measured contrast values where measurable, the fallback behavior, and any limitation that remains. Do not claim a check passed without evidence.
+
+### How to measure (web)
+- **Contrast over glass:** screenshot with every text node made invisible first (`* { color: transparent !important }`), sample the background at each text box's centre from that image, composite the text colour over it if the text is semi-transparent, then compute the ratio. Sampling with the glyphs visible measures the glyph pixels and reports false failures.
+- **Whether a blur earns its cost:** screenshot the surface with the blur on and off; report max channel difference, mean, and the fraction of pixels differing by more than 2. Under ~5/255 max the blur is invisible and the surface should be static.
+- **Scroll cost:** record `requestAnimationFrame` deltas while scrolling programmatically; report median, p95 and worst, with all filters off as the control.
+- **Layer count:** count elements whose computed `backdrop-filter` is not `none` and are in the viewport, per page and per state (menu open, hover).
+- **Rim and fallbacks:** render at 2-3x device scale and crop the edge; render with `forced-colors: active` and `prefers-contrast: more` emulated and confirm solid fills and visible borders.
+
+---
+
+## 17. Field notes from a production build
+
+Findings from applying this system end to end on a live site, measured rather than assumed. They refine the principles above; they do not replace them.
+
+### 17.1 Design-tool parity: Figma's Glass effect
+Figma's Glass effect (Light, Refraction, Depth, Dispersion, Frost, Splay) composites differently from CSS, so its numbers are a brief, not a spec. What each slider corresponds to on the web, and what it took to match the *rendered* look:
+
+| Figma control | What it does | Web counterpart | Note |
+|---|---|---|---|
+| Fill (white, N%) | pane opacity over the blurred backdrop | `background: color-mix(surface N%, transparent)` | Figma 50% needed ~72% in CSS to look the same over a blurred photo; at CSS 50% the pane read as milk. Match the look, then record the number. |
+| Frost | backdrop blur | `backdrop-filter: blur()` | Frost in the mid-30s on a pane roughly 270px wide landed at 14px. |
+| Refraction + Depth | edge lensing: how far and how wide the rim bends the backdrop | displacement map from the outline (17.2), `scale` in px and bevel width as a fraction of the short side | Depth ≈ bevel band width; ~13-16% of the height read right. |
+| Dispersion | colour fringe at the rim | three displacement passes at reach ±Δ, one per channel, recombined | Only with an edge-weighted map; uniform dispersion desaturates. |
+| Splay | how strongly content stretches outward at the edge | sign and magnitude of the displacement (inward-pointing vector = content splays outward) | |
+| Light (angle, %) | rim light direction and strength | lighting map from the same outline normals, or a top-edge gradient stroke | -45° = key light from the upper left. |
+
+Workflow that worked: build to the numbers, screenshot next to the reference at 2-3x, then move fill and frost until the *look* matches, and write the final numbers and the reason into the token comments.
+
+### 17.2 Edge-concentrated lensing on the web
+The one technique that separates a blurred rectangle from something that reads as glass, and it only works in Chromium:
+
+1. Rasterise the element's outline once on a canvas; compute the distance of every inside pixel to the outline.
+2. Apply a biconvex profile over a band of width zR inside the edge: `h(d) = sqrt(d · (2zR − d))`, flat beyond it (from the open-source liquidglass shader).
+3. Take the normal `N = normalize(−∇h, 1)`. `N.xy` is zero across the flat middle and grows to unit length at the rim; encode `−N.xy` into the R/G channels of a PNG (128 = no displacement).
+4. Hand it to the filter as `<feImage href="data:…" preserveAspectRatio="none">` with `filterUnits="objectBoundingBox"`, feed `feDisplacementMap`. Chromium honours `feImage` inside `backdrop-filter` (verified with a stripe test first). Run the lens *before* the blur in the filter list.
+5. The same normals against a fixed light give a rim-light overlay: bright where the bevel faces the light, faintly shaded where it faces away, plus a hairline on the outline.
+
+Gate the whole thing behind `@supports (backdrop-filter: blur(1px) url(#a))`. Safari and Firefox get the frosted pane, rim light and fill without the bend, which must already be the designed baseline.
+
+### 17.3 Apple guidance that translated directly
+From Apple's Liquid Glass overview, the HIG Materials page and WWDC25 "Meet Liquid Glass":
+- **Scroll edge effect** under the bar (section 6). Split across two elements because of the mask + backdrop-filter bug.
+- **Content-aware shadow** on the bar (section 6).
+- **Tinted primary action:** an opaque brand fill "breaks the visual character of Liquid Glass". Brand colour at 84% with the rim and key light measured 5.2-5.5:1 for white text in every scroll state; below ~78% it starts to fail over a pale backdrop.
+- **Interactive illumination:** on press the material lights from the point of contact and the glow spreads. One delegated `pointerdown` listener writes `--press-x/--press-y` to the pressed element; CSS draws a radial glow from that point that scales up while `:active`.
+- **Thicker material when a surface morphs larger:** a wider bevel band and brighter Fresnel line on the Thick tier.
+- **Not adopted, on the owner's instruction:** Apple says not to use Liquid Glass in the content layer. When the product owner explicitly wants glassmorphic content panels, use the static variant (no blur) so the aesthetic is kept at zero per-frame cost, and record the override where the next person will read it.
+
+### 17.4 Give the glass something to be glass to
+A footer that had been a page's one dark slab became a Thick frosted pane sitting on its own backlight: three soft radial glows in the brand colours, blurred 28px, painted as a *sibling before* the pane (a child would paint over the material; an ancestor with a filter would become a backdrop root). Without the backlight the frost had nothing to work on. The same logic fixed the page background: near-white pastel blobs behind 50-75% white panels meant there was nothing to see through; saturated blobs cost nothing to render and made the material legible as material.
+
+### 17.5 Working with the owner
+- **Reference first.** A screenshot of the design tool's render, or a photo of the intended look, resolves more than any number of adjectives. Ask for it before tuning.
+- **One knob per property.** Every value someone might ask to change (fill, frost, bevel width, offsets, tint) is a single token with a comment saying why it has that value. Revisions become one-line changes.
+- **Polish passes are single revertable commits.** State in the PR what moved and what did not (geometry, positions, assets, motion), and how to revert.
+- **Autonomous mode.** When the owner says to proceed without proposals, skip Phase C and put the layer map, the measurements and every deliberate override into commit messages instead. The reasoning still has to exist somewhere the next person will find it.
+- **Assets:** design-tool "SVG" exports are often a bitmap in an SVG wrapper with a provenance manifest (0.2-1.2 MB each). Render each one and sample the corners before trusting it to be transparent; then rasterise at ~2.5x the display size and re-encode (WebP), keeping the filename so nothing else changes.
