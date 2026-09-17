@@ -37,6 +37,17 @@ Then ask for things like:
 
 The skill first inspects the project and proposes a layer map. It does not start changing the UI until that proposal exists.
 
+## What's new
+
+**Field notes from a production build** (section 17). The skill was applied end to end on a live site, and the things that were measured rather than assumed are now in it:
+
+- a Figma Glass effect → CSS mapping, with the numbers that actually matched the rendered look (they are not the slider numbers)
+- edge-concentrated lensing on the web: a displacement map built from the element's own outline, delivered through `feImage` inside `backdrop-filter`
+- three engine bugs that silently kill the effect (mask + backdrop-filter in Chrome, `url()` dropping the whole declaration in Safari/Firefox, `@theme inline` baking tokens in Tailwind v4)
+- Apple's scroll edge effect, content-aware shadow, tinted primary action and press illumination, translated to CSS with measured contrast
+- how to measure contrast over glass, whether a blur is even visible, and what each filtered layer costs per frame
+- rules for working with a product owner: reference render first, one knob per property, revertable polish commits
+
 ## Core ideas
 
 1. **Glass is for floating, functional UI** (navigation, search, filters, toolbars, menus, sheets). Content stays solid and dominant.
